@@ -51,6 +51,15 @@ CREATE TABLE IF NOT EXISTS orders(
 );
 CREATE INDEX IF NOT EXISTS idx_orders_device ON orders(device_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status, created_at DESC);
+CREATE TABLE IF NOT EXISTS downloads(
+    id      INTEGER PRIMARY KEY AUTOINCREMENT,
+    ts      INTEGER NOT NULL,
+    file    TEXT NOT NULL,
+    ip      TEXT DEFAULT '',
+    ua      TEXT DEFAULT '',
+    referer TEXT DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS idx_downloads_ts ON downloads(ts DESC);
 CREATE TABLE IF NOT EXISTS claim_codes(
     code       TEXT PRIMARY KEY,
     created_at INTEGER NOT NULL,
@@ -274,6 +283,27 @@ class Store:
 
     def list_claims(self, limit=50):
         return self._query('SELECT * FROM claim_codes ORDER BY created_at DESC LIMIT ?', (limit,))
+
+    # ---- 下载统计 ----
+    def log_download(self, file, ip='', ua='', referer=''):
+        self._exec('INSERT INTO downloads(ts,file,ip,ua,referer) VALUES(?,?,?,?,?)',
+                   (now(), file[:120], ip[:60], (ua or '')[:200], (referer or '')[:200]))
+
+    def download_stats(self, days=14):
+        ts = now()
+        day = ts - (ts % 86400)
+        total = (self._query_one('SELECT COUNT(*) c FROM downloads') or {}).get('c', 0)
+        today = (self._query_one('SELECT COUNT(*) c FROM downloads WHERE ts>=?', (day,)) or {}).get('c', 0)
+        week = (self._query_one('SELECT COUNT(*) c FROM downloads WHERE ts>=?', (ts - 7 * 86400,))
+                or {}).get('c', 0)
+        by_file = self._query(
+            'SELECT file, COUNT(*) c, MAX(ts) last_ts FROM downloads GROUP BY file ORDER BY c DESC')
+        by_day = self._query(
+            "SELECT strftime('%Y-%m-%d', ts, 'unixepoch', 'localtime') d, COUNT(*) c "
+            'FROM downloads WHERE ts>=? GROUP BY d ORDER BY d DESC', (ts - days * 86400,))
+        recent = self._query('SELECT ts,file,ip,referer FROM downloads ORDER BY id DESC LIMIT 50')
+        return {'total': total, 'today': today, 'week': week,
+                'by_file': by_file, 'by_day': by_day, 'recent': recent}
 
     # ---- stats ----
     def stats(self):

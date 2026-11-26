@@ -373,6 +373,7 @@ a.link{{color:#58a6ff;text-decoration:none}}
 </div></div>
 
 <div class="badges">
+<span class="badge">累计下载 {downloads} 次</span>
 <span class="badge">macOS {min_macos}+</span>
 <span class="badge">Intel / Apple 芯片（Rosetta 2）</span>
 <span class="badge">试用 {trial} 天</span>
@@ -880,6 +881,10 @@ class Handler(BaseHTTPRequestHandler):
             cards.append(DOWNLOAD_CARD.format(
                 name=name, label=label, size=human(size), sha=digest,
                 cls=primary, href='/download/' + urllib.parse.quote(name)))
+        try:
+            dl_total = self.app.store.download_stats(1)['total']
+        except Exception:
+            dl_total = 0
         page = DOWNLOAD_PAGE.format(
             version=meta.get('version', '3.3'),
             date=meta.get('date', ''),
@@ -890,6 +895,7 @@ class Handler(BaseHTTPRequestHandler):
             contact=(self.app.cfg['payment'].get('manual') or {}).get('contact', ''),
             base=self._site_base(),
             verify=self._verify_metas(),
+            downloads=dl_total,
         )
         self._send(200, page, 'text/html; charset=utf-8')
 
@@ -909,6 +915,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header('Content-Disposition', 'attachment; filename="%s"' % name)
         self.send_header('Cache-Control', 'public, max-age=3600')
         self.end_headers()
+        sent = 0
         with open(fp, 'rb') as f:
             while True:
                 chunk = f.read(256 * 1024)
@@ -916,8 +923,16 @@ class Handler(BaseHTTPRequestHandler):
                     break
                 try:
                     self.wfile.write(chunk)
+                    sent += len(chunk)
                 except (BrokenPipeError, ConnectionResetError):
-                    return
+                    break
+        if sent >= size:            # 完整送完才算一次下载（断了/取消了不计数）
+            try:
+                self.app.store.log_download(
+                    name, self.client_ip(), self.headers.get('User-Agent', ''),
+                    self.headers.get('Referer', ''))
+            except Exception:
+                pass
 
     # ---- 付费墙：一次性授权码 ----
 
@@ -1108,6 +1123,10 @@ class Handler(BaseHTTPRequestHandler):
             except Exception:
                 meta = {}
             return self.json_out({'release': meta, 'files': items})
+
+        if action == 'downloads' and method == 'GET':
+            days = min(90, int(query.get('days', ['14'])[0] or 14))
+            return self.json_out(store.download_stats(days))
 
         if action == 'claims' and method == 'GET':
             limit = min(300, int(query.get('limit', ['100'])[0] or 100))
