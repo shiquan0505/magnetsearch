@@ -1124,6 +1124,31 @@ class Handler(BaseHTTPRequestHandler):
                 meta = {}
             return self.json_out({'release': meta, 'files': items})
 
+        if action == 'users' and method == 'GET':
+            state = (query.get('state', ['all'])[0] or 'all').strip()
+            try:
+                limit = min(500, int(query.get('limit', ['200'])[0] or 200))
+            except Exception:
+                limit = 200
+            rows = self.app.store.list_devices_by_state(state, limit)
+            counts = {k: len(self.app.store.list_devices_by_state(k, 5000))
+                      for k in ('trial', 'expired', 'licensed', 'pending')}
+            ts = int(time.time())
+            data = []
+            for r in rows:
+                data.append({
+                    'device_id': r['device_id'],
+                    'first_seen': r['first_seen'], 'last_seen': r['last_seen'],
+                    'trial_end': r['trial_end'], 'trial_left': r['trial_left'],
+                    'trial_overdue': r['trial_overdue'], 'licensed': r['licensed'],
+                    'plan': r.get('lic_plan') or '', 'platform': r.get('platform') or '',
+                    'app_version': r.get('app_version') or '', 'blocked': int(r.get('blocked') or 0),
+                    'pending_orders': int(r.get('pending_orders') or 0),
+                    'last_order_ts': r.get('last_order_ts') or 0,
+                    'note': r.get('note') or '',
+                })
+            return self.json_out({'state': state, 'counts': counts, 'now': ts, 'users': data})
+
         if action == 'downloads' and method == 'GET':
             days = min(90, int(query.get('days', ['14'])[0] or 14))
             return self.json_out(store.download_stats(days))

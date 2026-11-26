@@ -23,6 +23,13 @@ button.gray{background:#30363d}
 .tag.paid{background:#1a7f3722;color:#3fb950}
 .tag.pending{background:#9e6a0322;color:#d29922}
 .empty{color:#5d6672;font-size:12px;padding:10px 2px}
+.tabbtn{background:#1b1f27;color:#c9d1d9;border:1px solid #30363d;border-radius:8px;
+ padding:6px 12px;margin-right:8px;cursor:pointer;font-size:13px}
+.tabbtn.active{background:#2f81f7;color:#fff;border-color:#2f81f7}
+.tag{display:inline-block;padding:2px 8px;border-radius:10px;font-size:12px}
+.tag.trial{background:#1f6feb33;color:#58a6ff}
+.tag.expired{background:#f8514933;color:#ff7b72}
+.tag.licensed{background:#23863633;color:#3fb950}
 </style></head><body>
 
 <div class="top">
@@ -31,6 +38,20 @@ button.gray{background:#30363d}
 </div>
 
 <div class="stats" id="stats"></div>
+
+<h3>试用 / 冻结 / 买断用户</h3>
+<div class="stats" id="userstats"></div>
+<div style="margin:8px 0 10px">
+  <button class="tabbtn active" data-state="trial">试用中</button>
+  <button class="tabbtn" data-state="expired">试用已到期（冻结）</button>
+  <button class="tabbtn" data-state="licensed">已买断</button>
+  <button class="tabbtn" data-state="pending">有未支付订单</button>
+  <button class="tabbtn" data-state="all">全部</button>
+</div>
+<table id="usertbl"><thead><tr>
+  <th>设备</th><th>状态</th><th>首次试用</th><th>剩余 / 逾期</th><th>最近活跃</th>
+  <th>版本</th><th>未付订单</th><th>备注</th>
+</tr></thead><tbody></tbody></table>
 
 <h3>下载统计</h3>
 <div class="stats" id="dlstats"></div>
@@ -98,6 +119,33 @@ async function load() {
     ['设备总数', d.devices_total], ['今日新增', d.devices_today], ['已授权', d.licenses_total],
     ['已支付订单', d.orders_paid], ['待支付', d.orders_pending], ['收入', money(d.revenue_cents)]
   ].map(x => `<div class="card"><b>${x[1]}</b><span class="muted">${x[0]}</span></div>`).join('');
+
+  let userState = 'trial';
+  async function loadUsers(state) {
+    const r = await api('/admin/api/users?state=' + state);
+    if (!r || r.code !== 0) return;
+    const d = r.data, c = d.counts;
+    $('#userstats').innerHTML = [['试用中', c.trial], ['试用到期（冻结）', c.expired],
+      ['已买断', c.licensed], ['有未支付订单', c.pending]]
+      .map(x => `<div class="card"><b>${x[1]}</b><span class="muted">${x[0]}</span></div>`).join('');
+    const rows = (d.users || []).map(u => {
+      const st = u.licensed ? '<span class="tag licensed">已买断</span>'
+        : (u.trial_left > 0 ? '<span class="tag trial">试用中</span>'
+        : '<span class="tag expired">已冻结</span>');
+      const left = u.licensed ? '永久'
+        : (u.trial_left > 0 ? Math.ceil(u.trial_left / 86400) + ' 天'
+        : '逾期 ' + Math.ceil(u.trial_overdue / 86400) + ' 天');
+      return `<tr><td><code>${(u.device_id || '').slice(0, 18)}…</code></td><td>${st}</td>
+        <td>${fmt(u.first_seen)}</td><td>${left}</td><td>${fmt(u.last_seen)}</td>
+        <td>${u.app_version || '-'}</td><td>${u.pending_orders || 0}</td><td>${u.note || ''}</td></tr>`;
+    }).join('');
+    $('#usertbl tbody').innerHTML = rows || '<tr><td colspan="8" class="empty">这个分类下还没有用户</td></tr>';
+  }
+  document.querySelectorAll('.tabbtn').forEach(b => b.onclick = () => {
+    document.querySelectorAll('.tabbtn').forEach(x => x.classList.remove('active'));
+    b.classList.add('active'); userState = b.dataset.state; loadUsers(userState);
+  });
+  await loadUsers(userState);
 
   let dl;
   try { dl = await api('/admin/api/downloads?days=14'); } catch (e) { dl = null; }

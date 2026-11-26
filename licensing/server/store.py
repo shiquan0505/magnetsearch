@@ -149,6 +149,39 @@ class Store:
                 ('%' + q + '%', '%' + q + '%', limit))
         return self._query('SELECT * FROM devices ORDER BY last_seen DESC LIMIT ?', (limit,))
 
+    def list_devices_by_state(self, state='all', limit=200):
+        """state: trial 试用中 / expired 试用到期未购买 / licensed 已买断 / pending 有未支付订单 / all"""
+        ts = now()
+        base = ("SELECT d.*, l.plan AS lic_plan, l.expires_at AS lic_exp, l.revoked AS lic_revoked,"
+                " (SELECT COUNT(*) FROM orders o WHERE o.device_id=d.device_id AND o.status='pending') AS pending_orders,"
+                " (SELECT MAX(o.created_at) FROM orders o WHERE o.device_id=d.device_id) AS last_order_ts"
+                " FROM devices d LEFT JOIN licenses l ON l.device_id=d.device_id")
+        if state == 'trial':
+            rows = self._query(base + " WHERE (l.device_id IS NULL OR l.revoked=1)"
+                               " AND d.trial_start + d.trial_days*86400 > ? ORDER BY d.last_seen DESC LIMIT ?",
+                               (ts, limit))
+        elif state == 'expired':
+            rows = self._query(base + " WHERE (l.device_id IS NULL OR l.revoked=1)"
+                               " AND d.trial_start + d.trial_days*86400 <= ? ORDER BY d.last_seen DESC LIMIT ?",
+                               (ts, limit))
+        elif state == 'licensed':
+            rows = self._query(base + " WHERE l.device_id IS NOT NULL AND l.revoked=0"
+                               " ORDER BY d.last_seen DESC LIMIT ?", (limit,))
+        elif state == 'pending':
+            rows = self._query(base + " WHERE pending_orders > 0 ORDER BY last_order_ts DESC LIMIT ?", (limit,))
+        else:
+            rows = self._query(base + " ORDER BY d.last_seen DESC LIMIT ?", (limit,))
+        out = []
+        for row in rows:
+            r = dict(row)
+            end = r['trial_start'] + r['trial_days'] * 86400
+            r['trial_end'] = end
+            r['trial_left'] = max(0, end - ts)
+            r['trial_overdue'] = max(0, ts - end)
+            r['licensed'] = bool(r.get('lic_plan')) and not r.get('lic_revoked')
+            out.append(r)
+        return out
+
     def set_blocked(self, device_id, blocked=True, note=None):
         self._exec('UPDATE devices SET blocked=? WHERE device_id=?', (1 if blocked else 0, device_id))
         if note is not None:
