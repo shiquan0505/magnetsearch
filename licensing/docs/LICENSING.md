@@ -323,6 +323,23 @@ http://121.196.163.89:8899/download
 └── MagnetSearch-3.3.dmg
 ```
 
+发新版本一条命令（**走 HTTPS，不需要 SSH**，服务器 22 端口被墙时也能发）：
+
+```bash
+export MS_LICENSE_TOKEN=<后台 admin token>
+bash licensing/tools/push_release.sh ../MagnetSearch-3.6.pkg ../MagnetSearch-3.6.dmg 3.6
+```
+
+对应接口（都在 `/admin/api/`，用 `X-Admin-Token` 鉴权）：
+
+| 接口 | 作用 |
+|---|---|
+| `POST /admin/api/release/upload?name=xxx.pkg` | 原始字节上传（单文件 ≤300MB，落地到 `public/`，返回 sha256） |
+| `POST /admin/api/release/publish` | `{version, files, notes}` → 重写 `release.json`，下载页立即切换 |
+| `GET  /admin/api/release/list` | 查看当前版本与已上传文件 |
+
+旧的 `scp + tar` 流程（下面这段）作为备用保留：
+
 发新版本一条命令：
 
 ```bash
