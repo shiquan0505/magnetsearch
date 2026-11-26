@@ -1,3 +1,13 @@
+# MagnetSearch for macOS
+
+> 📦 **下载 / 安装图文 / 更新日志**：<https://121.196.163.89.sslip.io/download>
+> macOS 12+（Intel 原生 / Apple 芯片走 Rosetta 2）· 试用 7 天 · ¥29 买断，按设备授权、无需卡密
+
+磁力搜索客户端：多源聚合 + 随包安装的本地 Torznab 服务（只监听 `127.0.0.1:3333`）。
+查询容错（`rufuse` → `rufus`）、中文拆词排序（`疯狂动物城` 精确命中优先，并行查 IMDb 译名）、结果上限 120、多源并行。
+
+---
+
 # MagnetSearch for macOS（社区兼容修复版）
 
 > 让一份用 Xcode 26 / macOS 26 SDK 构建的 SwiftUI 磁力搜索客户端，能在 **macOS 12 及以上** 跑起来；
