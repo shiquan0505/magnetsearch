@@ -1,0 +1,135 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MagnetSearch 授权后台</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;padding:24px;background:#0e1116;color:#e6edf3;font-family:-apple-system,"PingFang SC",sans-serif}
+.top{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}
+h1{font-size:20px;margin:0}
+.top a{color:#8b949e;font-size:12px;text-decoration:none;margin-left:14px}
+.top a:hover{color:#58a6ff}
+.stats{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:22px}
+.card{background:#161b22;border:1px solid #21262d;border-radius:12px;padding:14px 18px;min-width:130px}
+.card b{font-size:22px;display:block;line-height:1.3}
+.muted{color:#8b949e;font-size:12px}
+h3{font-size:13px;color:#8b949e;font-weight:500;margin:22px 0 8px}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{text-align:left;padding:8px 10px;border-bottom:1px solid #21262d}
+th{color:#8b949e;font-weight:500;font-size:12px}
+code{color:#79c0ff;font-family:ui-monospace,Menlo,monospace;font-size:12px}
+button{background:#238636;color:#fff;border:0;border-radius:6px;padding:4px 10px;cursor:pointer;font-size:12px}
+button.gray{background:#30363d}
+.tag{display:inline-block;border-radius:6px;padding:1px 7px;font-size:11px}
+.tag.paid{background:#1a7f3722;color:#3fb950}
+.tag.pending{background:#9e6a0322;color:#d29922}
+.empty{color:#5d6672;font-size:12px;padding:10px 2px}
+</style></head><body>
+
+<div class="top">
+  <h1>MagnetSearch 授权后台</h1>
+  <div><a href="/download">下载页</a><a href="/admin/logout">退出登录</a></div>
+</div>
+
+<div class="stats" id="stats"></div>
+
+<h3>待支付订单（可手动补单）</h3>
+<table id="pending"><thead><tr><th>订单</th><th>设备</th><th>金额</th><th>创建时间</th><th></th></tr></thead><tbody></tbody></table>
+
+<h3>最近授权码（付费墙）</h3>
+<table id="claims"><thead><tr><th>授权码</th><th>发放时间</th><th>来源 IP</th><th>状态</th><th>绑定设备</th></tr></thead><tbody></tbody></table>
+
+<h3>最近已支付</h3>
+<table id="paid"><thead><tr><th>订单</th><th>设备</th><th>金额</th><th>支付时间</th></tr></thead><tbody></tbody></table>
+
+<h3>最近设备</h3>
+<table id="devices"><thead><tr><th>设备指纹</th><th>首次</th><th>最近</th><th>版本</th><th>状态</th><th></th></tr></thead><tbody></tbody></table>
+
+<script>
+const $ = s => document.querySelector(s);
+// 也支持用 ?token=xxx 快速打开（给运维临时看一眼用），登录后则走 cookie
+const TOK = new URLSearchParams(location.search).get('token')
+  || sessionStorage.getItem('ms_tok') || '';
+if (TOK) sessionStorage.setItem('ms_tok', TOK);
+const fmt = t => t ? new Date(t * 1000).toLocaleString('zh-CN') : '-';
+const money = c => '¥' + (c / 100).toFixed(2);
+
+async function api(path, opt) {
+  opt = opt || {};
+  opt.credentials = 'same-origin';
+  opt.headers = opt.headers || {};
+  if (TOK) opt.headers['X-Admin-Token'] = TOK;
+  const r = await fetch(path, opt);
+  if (r.status === 401) { location.href = '/admin/login'; throw new Error('unauthorized'); }
+  return await r.json();
+}
+
+async function markPaid(id) {
+  if (!confirm('确认已收到该订单款项？将立即开通终身授权')) return;
+  const j = await api('/admin/api/order/paid', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ order_id: id })
+  });
+  if (j.code === 0) load(); else alert(j.msg);
+}
+
+async function grantDevice(did) {
+  if (!confirm('给这台设备开通终身授权？')) return;
+  const j = await api('/admin/api/license/grant', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ device_id: did })
+  });
+  if (j.code === 0) alert('已授权'); else alert(j.msg);
+  load();
+}
+
+async function load() {
+  let s;
+  try { s = await api('/admin/api/stats'); } catch (e) { return; }
+  if (s.code !== 0) return;
+  const d = s.data;
+  $('#stats').innerHTML = [
+    ['设备总数', d.devices_total], ['今日新增', d.devices_today], ['已授权', d.licenses_total],
+    ['已支付订单', d.orders_paid], ['待支付', d.orders_pending], ['收入', money(d.revenue_cents)]
+  ].map(x => `<div class="card"><b>${x[1]}</b><span class="muted">${x[0]}</span></div>`).join('');
+
+  const o = await api('/admin/api/orders?status=pending&limit=30');
+  $('#pending tbody').innerHTML = (o.data || []).length ? o.data.map(r => `<tr>
+      <td><code>${r.order_id}</code></td>
+      <td><code>${r.device_id.slice(0, 14)}…</code></td>
+      <td>${money(r.amount_cents)}</td>
+      <td>${fmt(r.created_at)}</td>
+      <td><button onclick="markPaid('${r.order_id}')">标记已付</button></td></tr>`).join('')
+    : '<tr><td colspan="5" class="empty">没有待支付订单</td></tr>';
+
+  const c = await api('/admin/api/claims?limit=20');
+  $('#claims tbody').innerHTML = (c.data || []).length ? c.data.map(r => {
+      const state = r.used_at ? '<span class="tag paid">已使用</span>'
+        : (r.expires_at * 1000 < Date.now() ? '<span class="tag pending">已过期</span>'
+                                            : '<span class="tag pending">未使用</span>');
+      return `<tr><td><code>${r.code.slice(0,3)}-${r.code.slice(3)}</code></td>
+        <td>${fmt(r.created_at)}</td><td>${r.ip || '-'}</td><td>${state}</td>
+        <td><code>${r.device_id ? r.device_id.slice(0, 14) + '…' : '-'}</code></td></tr>`;
+    }).join('') : '<tr><td colspan="5" class="empty">还没有人领过码</td></tr>';
+
+  const p = await api('/admin/api/orders?status=paid&limit=30');
+  $('#paid tbody').innerHTML = (p.data || []).length ? p.data.map(r => `<tr>
+      <td><code>${r.order_id}</code></td>
+      <td><code>${r.device_id.slice(0, 14)}…</code></td>
+      <td>${money(r.amount_cents)}</td><td>${fmt(r.paid_at)}</td></tr>`).join('')
+    : '<tr><td colspan="4" class="empty">暂无</td></tr>';
+
+  const dv = await api('/admin/api/devices?limit=30');
+  $('#devices tbody').innerHTML = (dv.data || []).length ? dv.data.map(r => `<tr>
+      <td><code>${r.device_id.slice(0, 18)}…</code></td>
+      <td>${fmt(r.first_seen)}</td><td>${fmt(r.last_seen)}</td><td>${r.app_version || '-'}</td>
+      <td>${r.blocked ? '<span class="tag pending">已封禁</span>' : '<span class="tag paid">正常</span>'}</td>
+      <td><button class="gray" onclick="grantDevice('${r.device_id}')">发授权</button></td></tr>`).join('')
+    : '<tr><td colspan="6" class="empty">暂无设备</td></tr>';
+}
+
+load();
+setInterval(load, 15000);
+</script>
+</body></html>

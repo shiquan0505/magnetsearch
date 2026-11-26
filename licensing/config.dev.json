@@ -1,0 +1,49 @@
+{
+  "product": {
+    "id": "magnetsearch",
+    "name": "MagnetSearch 终身授权",
+    "price_cents": 2900,
+    "currency": "CNY",
+    "trial_days": 7
+  },
+  "server": {
+    "listen_host": "127.0.0.1",
+    "listen_port": 8899,
+    "public_base": "http://127.0.0.1:8899",
+    "db_path": "license.dev.db",
+    "admin_token": "dev-admin-token",
+    "recheck_hours": 6,
+    "order_ttl_seconds": 900,
+    "rate_limit_per_min": 600
+  },
+  "signing": {
+    "private_key_file": "keys/ed25519.dev.key",
+    "public_key_hex": "a29b3e6453ae2ae6dea0ae4d4a75402bde2ef95ce5a25a20c9d538536297d473",
+    "key_id": "k1"
+  },
+  "payment": {
+    "provider": "vmq",
+    "manual": {
+      "qr_image": "",
+      "contact": "客服微信/QQ：请填写",
+      "alipay": "",
+      "unique_amount": true
+    },
+    "vmq": {
+      "monitor_base": "http://127.0.0.1:8080",
+      "key": "vmq-local-secret",
+      "pay_type": 2
+    },
+    "epay": {
+      "api_base": "",
+      "pid": "",
+      "key": "",
+      "pay_type": "alipay",
+      "sitename": "MagnetSearch",
+      "device": "pc"
+    },
+    "generic": {
+      "key": "gateway-secret"
+    }
+  }
+}

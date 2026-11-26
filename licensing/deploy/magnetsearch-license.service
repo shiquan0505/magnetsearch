@@ -1,0 +1,28 @@
+# VPS / systemd 部署：授权服务
+#   sudo cp magnetsearch-license.service /etc/systemd/system/
+#   sudo systemctl daemon-reload && sudo systemctl enable --now magnetsearch-license
+#   journalctl -u magnetsearch-license -f
+[Unit]
+Description=MagnetSearch License Server (trial + one-time purchase)
+After=network.target
+
+[Service]
+Type=simple
+User=mslic
+Group=mslic
+WorkingDirectory=/opt/magnetsearch-license/server
+Environment=MS_LICENSE_CONFIG=/opt/magnetsearch-license/config.json
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/usr/bin/python3 /opt/magnetsearch-license/server/license_server.py --config /opt/magnetsearch-license/config.json
+Restart=always
+RestartSec=3
+# 加固
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/magnetsearch-license
+LimitNOFILE=4096
+
+[Install]
+WantedBy=multi-user.target

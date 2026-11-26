@@ -1,0 +1,12 @@
+*.pkg
+*.dmg
+licensing/public/*.pkg
+licensing/public/*.dmg
+licensing/keys/
+licensing/build/
+licensing/*.db*
+server/build/
+server/dist/
+server/*.spec
+.DS_Store
+__pycache__/

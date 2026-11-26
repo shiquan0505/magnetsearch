@@ -1,0 +1,67 @@
+#!/bin/bash
+# 安装后：清隔离属性 + 给当前登录用户装搜索服务（LaunchAgent）
+APP="/Applications/MagnetSearch.app"
+BACKEND="$APP/Contents/Resources/backend/magnetsearch-server"
+
+# 兜底：万一安装器把 app "重定位"到了旧副本的位置，这里搬回 /Applications
+if [ ! -d "$APP" ]; then
+    REAL=$(mdfind "kMDItemCFBundleIdentifier == 'com.magnetsearch.app'" 2>/dev/null | head -1)
+    if [ -n "$REAL" ] && [ "$REAL" != "$APP" ]; then
+        echo "检测到 app 被安装到 $REAL，正在移动到 $APP"
+        mkdir -p /Applications
+        rm -rf "$APP"
+        mv "$REAL" "$APP" 2>/dev/null || cp -R "$REAL" "$APP" 2>/dev/null
+    fi
+fi
+if [ ! -d "$APP" ]; then
+    echo "❌ 未在 /Applications 找到 MagnetSearch.app，安装可能被系统重定位。"
+    echo "   请删除旧的 MagnetSearch.app 副本后重新安装，或手动把 app 拖进「应用程序」。"
+    exit 0
+fi
+xattr -dr com.apple.quarantine "$APP" 2>/dev/null || true
+chmod +x "$BACKEND" 2>/dev/null
+chown -R root:wheel "$APP" 2>/dev/null
+
+CONSOLE_USER=$(stat -f%Su /dev/console)
+if [ -z "$CONSOLE_USER" ] || [ "$CONSOLE_USER" = "root" ]; then
+    echo "未检测到登录用户，跳过搜索服务安装（登录后重新运行本安装包即可）"
+    exit 0
+fi
+U=$(id -u "$CONSOLE_USER")
+H=$(dscl . -read "/Users/$CONSOLE_USER" NFSHomeDirectory 2>/dev/null | awk '{print $2}')
+[ -d "$H" ] || H="/Users/$CONSOLE_USER"
+LA="$H/Library/LaunchAgents"
+LOG="$H/Library/Logs/MagnetSearchBackend.log"
+mkdir -p "$LA" "$H/Library/Logs"
+chown "$CONSOLE_USER" "$LA" "$H/Library/Logs" 2>/dev/null
+
+cat > "$LA/com.magnetsearch.backend.plist" <<PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key><string>com.magnetsearch.backend</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>$BACKEND</string>
+        <string>--host</string><string>127.0.0.1</string>
+        <string>--port</string><string>3333</string>
+    </array>
+    <key>RunAtLoad</key><true/>
+    <key>KeepAlive</key><true/>
+    <key>StandardOutPath</key><string>$LOG</string>
+    <key>StandardErrorPath</key><string>$LOG</string>
+</dict>
+</plist>
+PLIST
+chown "$CONSOLE_USER" "$LA/com.magnetsearch.backend.plist"
+
+launchctl asuser "$U" launchctl unload "$LA/com.magnetsearch.backend.plist" 2>/dev/null
+launchctl asuser "$U" launchctl load -w "$LA/com.magnetsearch.backend.plist" 2>/dev/null
+sleep 3
+if curl -s -m 6 http://127.0.0.1:3333/health | grep -q ok; then
+    echo "搜索服务已启动：http://127.0.0.1:3333"
+else
+    echo "搜索服务未响应，见日志：$LOG"
+fi
+exit 0

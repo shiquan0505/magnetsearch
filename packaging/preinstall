@@ -1,0 +1,9 @@
+#!/bin/bash
+# 升级/覆盖安装前先停掉旧的 app 与服务
+pkill -f "/Applications/MagnetSearch.app/Contents/MacOS/MagnetSearch" 2>/dev/null
+CONSOLE_USER=$(stat -f%Su /dev/console)
+if [ -n "$CONSOLE_USER" ] && [ "$CONSOLE_USER" != "root" ]; then
+    H=$(dscl . -read "/Users/$CONSOLE_USER" NFSHomeDirectory 2>/dev/null | awk '{print $2}')
+    launchctl asuser "$(id -u "$CONSOLE_USER")" launchctl unload "$H/Library/LaunchAgents/com.magnetsearch.backend.plist" 2>/dev/null
+fi
+exit 0

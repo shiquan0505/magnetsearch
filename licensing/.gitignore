@@ -1,0 +1,16 @@
+# 忽略运行期文件
+license.db
+license.db-wal
+license.db-shm
+keys/
+build/
+config.local.json
+
+# 客户端生成物（由 tools/gen_client_config.py 生成）
+client/LicenseConfig.generated.swift
+license.dev.db
+license.dev.db-wal
+license.dev.db-shm
+public/*.pkg
+public/*.dmg
+public/*.zip

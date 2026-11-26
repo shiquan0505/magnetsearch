@@ -1,0 +1,14 @@
+{
+  "version": "3.4",
+  "date": "2026-11-26",
+  "min_macos": "12.0",
+  "notes": [
+    "搜索支持拼写容错（rufuse → rufus）",
+    "中文关键词自动拆词排序（完全匹配优先）",
+    "多源并行检索，结果上限 120，响应更快"
+  ],
+  "files": [
+    "MagnetSearch-3.4.pkg",
+    "MagnetSearch-3.4.dmg"
+  ]
+}

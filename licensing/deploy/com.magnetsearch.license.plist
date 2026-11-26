@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 本机自用（Mac 当授权服务器）：
+     cp com.magnetsearch.license.plist ~/Library/LaunchAgents/
+     launchctl load -w ~/Library/LaunchAgents/com.magnetsearch.license.plist -->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key><string>com.magnetsearch.license</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/usr/bin/python3</string>
+        <string>__LIC_DIR__/server/license_server.py</string>
+        <string>--config</string>
+        <string>__LIC_DIR__/config.json</string>
+    </array>
+    <key>WorkingDirectory</key><string>__LIC_DIR__</string>
+    <key>RunAtLoad</key><true/>
+    <key>KeepAlive</key><true/>
+    <key>StandardOutPath</key><string>/tmp/magnetsearch-license.log</string>
+    <key>StandardErrorPath</key><string>/tmp/magnetsearch-license.log</string>
+</dict>
+</plist>

@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<installer-gui-script minSpecVersion="2">
+    <title>MagnetSearch 磁力搜索助手</title>
+    <organization>com.magnetsearch</organization>
+    <domains enable_localSystem="true"/>
+    <options customize="never" require-scripts="false" hostArchitectures="x86_64,arm64"/>
+    <welcome language="zh_CN" mime-type="text/plain"><![CDATA[
+MagnetSearch 磁力搜索助手（macOS 12+ 免激活版）
+
+本安装包会：
+  1. 把 MagnetSearch.app 安装到「应用程序」
+  2. 给它装一个本地搜索服务（开机自启，监听 127.0.0.1:3333）
+     —— app 本身只是搜索客户端，没有这个服务就搜不到内容
+
+安装完成后直接打开 app 输入片名即可，中英文都支持。
+]]></welcome>
+    <conclusion language="zh_CN" mime-type="text/plain"><![CDATA[
+安装完成。
+
+· 打开 MagnetSearch 直接搜索；设置里的服务器地址保持 http://localhost:3333
+· 搜索服务自检：curl http://127.0.0.1:3333/health
+· 服务日志：~/Library/Logs/MagnetSearchBackend.log
+· 卸载：把 /Applications/MagnetSearch.app 拖到废纸篓，再执行
+        launchctl unload ~/Library/LaunchAgents/com.magnetsearch.backend.plist
+        rm ~/Library/LaunchAgents/com.magnetsearch.backend.plist
+]]></conclusion>
+    <pkg-ref id="com.magnetsearch.pkg"/>
+    <choices-outline><line choice="default"><line choice="com.magnetsearch.pkg"/></line></choices-outline>
+    <choice id="default"/>
+    <choice id="com.magnetsearch.pkg" visible="false" title="MagnetSearch" description="MagnetSearch.app + 本地搜索服务">
+        <pkg-ref id="com.magnetsearch.pkg"/>
+    </choice>
+    <pkg-ref id="com.magnetsearch.pkg" version="3.2" onConclusion="none">core-fixed.pkg</pkg-ref>
+</installer-gui-script>
