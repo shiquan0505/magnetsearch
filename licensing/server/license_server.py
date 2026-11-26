@@ -1050,6 +1050,65 @@ class Handler(BaseHTTPRequestHandler):
             body, _ = self.read_body()
             store.set_blocked(body.get('device_id', ''), bool(body.get('blocked', True)), body.get('note'))
             return self.json_out({'ok': True})
+        if action == 'release/upload' and method == 'POST':
+            name = (query.get('name', [''])[0] or '').strip()
+            if not re.match(r'^[A-Za-z0-9._-]+\.(pkg|dmg|zip)$', name):
+                return self.fail('文件名不合法（只允许 .pkg/.dmg/.zip）', 400)
+            n = int(self.headers.get('Content-Length') or 0)
+            if n <= 0 or n > 300 * 1024 * 1024:
+                return self.fail('文件大小异常', 400)
+            pdir = self._public_dir()
+            os.makedirs(pdir, exist_ok=True)
+            tmp = os.path.join(pdir, '.upload-%d.tmp' % int(time.time() * 1000))
+            left, digest = n, hashlib.sha256()
+            with open(tmp, 'wb') as f:
+                while left > 0:
+                    chunk = self.rfile.read(min(256 * 1024, left))
+                    if not chunk:
+                        break
+                    f.write(chunk)
+                    digest.update(chunk)
+                    left -= len(chunk)
+            if left != 0:
+                os.unlink(tmp)
+                return self.fail('上传中断', 400)
+            final = os.path.join(pdir, name)
+            os.replace(tmp, final)
+            log.info('发布文件已上传：%s（%.1f MB）', name, n / 1024.0 / 1024.0)
+            return self.json_out({'name': name, 'size': n, 'sha256': digest.hexdigest()})
+
+        if action == 'release/publish' and method == 'POST':
+            body, _ = self.read_body()
+            version = (body.get('version') or '').strip()
+            files = body.get('files') or []
+            if not version or not isinstance(files, list) or not files:
+                return self.fail('需要 version 和 files', 400)
+            pdir = self._public_dir()
+            meta_path = os.path.join(pdir, 'release.json')
+            try:
+                meta = json.load(open(meta_path, 'r', encoding='utf-8'))
+            except Exception:
+                meta = {}
+            meta.update({'version': version, 'date': time.strftime('%Y-%m-%d'),
+                         'files': files,
+                         'notes': body.get('notes') or meta.get('notes') or []})
+            json.dump(meta, open(meta_path, 'w', encoding='utf-8'), ensure_ascii=False, indent=2)
+            log.info('下载页已切换到 %s：%s', version, ', '.join(files))
+            return self.json_out(meta)
+
+        if action == 'release/list' and method == 'GET':
+            pdir = self._public_dir()
+            items = []
+            for fn in sorted(os.listdir(pdir)):
+                if fn.lower().endswith(('.pkg', '.dmg', '.zip')):
+                    fp = os.path.join(pdir, fn)
+                    items.append({'name': fn, 'size': os.path.getsize(fp)})
+            try:
+                meta = json.load(open(os.path.join(pdir, 'release.json'), encoding='utf-8'))
+            except Exception:
+                meta = {}
+            return self.json_out({'release': meta, 'files': items})
+
         if action == 'claims' and method == 'GET':
             limit = min(300, int(query.get('limit', ['100'])[0] or 100))
             return self.json_out(store.list_claims(limit))
