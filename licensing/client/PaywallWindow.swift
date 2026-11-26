@@ -12,6 +12,8 @@ struct PaywallContent {
     var refreshTitle: String = " 我已付款，立即刷新 "
     /// 付费墙模式：显示「粘贴授权码」输入框
     var showCodeEntry: Bool = false
+    /// 允许用户关掉收银台（已授权 / 试用期内点"了解购买"时都应该能关）
+    var showCloseButton: Bool = false
 }
 
 /// 收银台弹窗（软件内弹窗，不是全屏遮罩）。
@@ -35,6 +37,7 @@ final class PaywallWindow: NSObject, NSWindowDelegate {
     private var openButton: NSButton!
     private var codeRow: NSStackView!
     private var codeField: NSTextField!
+    private var closeButton: NSButton!
     private var retries = 0
 
     private let contentWidth: CGFloat = 460
@@ -45,6 +48,7 @@ final class PaywallWindow: NSObject, NSWindowDelegate {
     var onRefresh: (() -> Void)?
     var onOpenPayPage: (() -> Void)?
     var onQuit: (() -> Void)?
+    var onClose: (() -> Void)?
     var onRedeem: ((String) -> Void)?
 
     var isVisible: Bool { window?.isVisible ?? false }
@@ -81,6 +85,7 @@ final class PaywallWindow: NSObject, NSWindowDelegate {
         openButton.isHidden = !(c.showBuyButtons && c.showOpenPage)
         refreshButton.title = c.refreshTitle
         codeRow.isHidden = !c.showCodeEntry
+        closeButton.isHidden = !c.showCloseButton
         if let img = c.qrImage {
             qrView.image = img
             qrBox.isHidden = false
@@ -266,7 +271,13 @@ final class PaywallWindow: NSObject, NSWindowDelegate {
         quitButton.bezelStyle = .rounded
         quitButton.controlSize = .large
 
-        let row = NSStackView(views: [refreshButton, openButton, quitButton])
+        closeButton = NSButton(title: " 关闭 ", target: self, action: #selector(doClose))
+        closeButton.bezelStyle = .rounded
+        closeButton.controlSize = .large
+        closeButton.isHidden = true
+        closeButton.keyEquivalent = "\u{1b}"      // Esc 也能关
+
+        let row = NSStackView(views: [refreshButton, openButton, closeButton, quitButton])
         row.orientation = .horizontal
         row.spacing = 8
         sv.addArrangedSubview(row)
@@ -328,6 +339,8 @@ final class PaywallWindow: NSObject, NSWindowDelegate {
     }
     @objc private func doOpen() { onOpenPayPage?() }
     @objc private func doQuit() { onQuit?() }
+
+    @objc private func doClose() { onClose?() }
 
     func windowShouldClose(_ sender: NSWindow) -> Bool { false }
 

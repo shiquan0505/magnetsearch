@@ -1,14 +1,14 @@
 {
-  "version": "3.4",
+  "version": "3.5",
   "date": "2026-11-26",
   "min_macos": "12.0",
   "notes": [
-    "搜索支持拼写容错（rufuse → rufus）",
-    "中文关键词自动拆词排序（完全匹配优先）",
-    "多源并行检索，结果上限 120，响应更快"
+    "修复：已授权 / 试用期内点「了解购买」后窗口无法关闭（现在有「关闭」按钮，Esc 也能退）",
+    "已买断用户点「了解购买」直接显示授权状态，不再弹收银台",
+    "搜索：拼写容错（rufuse → rufus）、中文拆词排序、结果上限 120"
   ],
   "files": [
-    "MagnetSearch-3.4.pkg",
-    "MagnetSearch-3.4.dmg"
+    "MagnetSearch-3.5.pkg",
+    "MagnetSearch-3.5.dmg"
   ]
 }

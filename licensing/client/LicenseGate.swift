@@ -38,7 +38,23 @@ final class LicenseGate: NSObject {
     var remainingSecondsForDisplay: Int? { trialRemainingLocal() }
 
     func manualShowPaywall() {
+        // 已经买断的用户点"了解购买"：只弹一条状态信息，不锁界面
+        if isLicensedNow {
+            let a = NSAlert()
+            a.messageText = "已授权 · 终身可用"
+            a.informativeText = "本机已永久解锁，无需再次购买。\n设备：\(DeviceIdentity.deviceID)"
+            a.addButton(withTitle: "好")
+            a.runModal()
+            return
+        }
         showPaywall(offline: false)
+    }
+
+    /// 只有"试用已结束且未授权"时才锁界面；其它情况都给关闭按钮
+    private var paywallShouldLock: Bool {
+        if isLicensedNow { return false }
+        let r = trialRemainingLocal() ?? 0
+        return r <= 0
     }
 
     func updateWindowCountdown() {
@@ -274,6 +290,10 @@ final class LicenseGate: NSObject {
         w.onRefresh = { [weak self] in self?.onPaywallRefresh() }
         w.onOpenPayPage = { [weak self] in self?.openPayPage() }
         w.onQuit = { NSApp.terminate(nil) }
+        w.onClose = { [weak self] in
+            NSLog("[LIC] 用户手动关闭收银台")
+            self?.dismissPaywall()
+        }
         w.onRedeem = { [weak self] code in self?.redeem(code) }
         paywall = w
         return w
@@ -322,6 +342,7 @@ final class LicenseGate: NSObject {
         }
 
         var c = PaywallContent()
+        c.showCloseButton = !paywallShouldLock
         c.status = orderID == nil ? "正在生成支付二维码…" : "支付宝 / 微信 扫码支付"
         w.show(content: c)
         // 只有 orderID 没有二维码内容（比如进程重启后从服务端带回 pending_order_id）时，
@@ -365,6 +386,7 @@ final class LicenseGate: NSObject {
             c.footer = "授权码一次性有效，只解锁这一台设备（\(DeviceIdentity.deviceID.prefix(12))…）"
             c.refreshTitle = " 我已付款，刷新 "
             c.showCodeEntry = true
+            c.showCloseButton = !paywallShouldLock
             return c
         }
 
