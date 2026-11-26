@@ -25,7 +25,10 @@ enum PaywallQR {
         req.setValue("Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 "
                      + "(KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1",
                      forHTTPHeaderField: "User-Agent")
-        URLSession(configuration: .ephemeral).dataTask(with: req) { data, _, _ in
+        let sessionCfg = URLSessionConfiguration.ephemeral
+        sessionCfg.timeoutIntervalForRequest = 8
+        sessionCfg.connectionProxyDictionary = [:]      // 同样绕开系统代理
+        URLSession(configuration: sessionCfg).dataTask(with: req) { data, _, _ in
             guard let data = data,
                   let html = String(data: data, encoding: .utf8) ?? String(data: data, encoding: .isoLatin1)
             else {

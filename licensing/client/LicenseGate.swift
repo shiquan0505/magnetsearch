@@ -223,6 +223,11 @@ final class LicenseGate: NSObject {
 
         case "trial_expired":
             updateMenuCountdown("试用已结束 · 购买授权…")
+            if let until = state.paywallSnoozedUntil, until > LocalState.now {
+                NSLog("[LIC] 试用已结束，但在「稍后再说」窗口内，不自动弹收银台")
+                scheduleRecheck()
+                return
+            }
             scheduleRecheck()
             if (data["pending_order_id"] as? String) != nil {
                 orderID = data["pending_order_id"] as? String
@@ -291,8 +296,11 @@ final class LicenseGate: NSObject {
         w.onOpenPayPage = { [weak self] in self?.openPayPage() }
         w.onQuit = { NSApp.terminate(nil) }
         w.onClose = { [weak self] in
-            NSLog("[LIC] 用户手动关闭收银台")
-            self?.dismissPaywall()
+            NSLog("[LIC] 用户手动关闭收银台（6 小时内不再自动弹）")
+            guard let self = self else { return }
+            self.state.paywallSnoozedUntil = LocalState.now + 6 * 3600
+            LocalState.save(self.state)
+            self.dismissPaywall()
         }
         w.onRedeem = { [weak self] code in self?.redeem(code) }
         paywall = w
@@ -311,11 +319,18 @@ final class LicenseGate: NSObject {
             c.subline = "如需恢复使用，请联系客服"
             c.status = "授权已停用"
             c.showBuyButtons = false
+            c.showCloseButton = true
             w.show(content: c)
             return
         }
 
         if offline {
+            if let until = state.paywallSnoozedUntil, until > LocalState.now {
+                NSLog("[LIC] 离线，但在「稍后再说」窗口内，不自动弹")
+                startOfflineRetry(silent: true)
+                return
+            }
+            startOfflineRetry()
             var c = PaywallContent()
             c.headline = paywallHeadline()
             c.subline = "需要连接授权服务器完成解锁"
@@ -323,6 +338,7 @@ final class LicenseGate: NSObject {
             c.footer = "确认网络后点「重新连接」；已付款但未解锁也可以重试"
             c.showOpenPage = false
             c.refreshTitle = " 重新连接 "
+            c.showCloseButton = true          // 离线绝不能把用户关在里面
             w.show(content: c)
             return
         }
@@ -342,7 +358,7 @@ final class LicenseGate: NSObject {
         }
 
         var c = PaywallContent()
-        c.showCloseButton = !paywallShouldLock
+        c.showCloseButton = true
         c.status = orderID == nil ? "正在生成支付二维码…" : "支付宝 / 微信 扫码支付"
         w.show(content: c)
         // 只有 orderID 没有二维码内容（比如进程重启后从服务端带回 pending_order_id）时，
@@ -386,7 +402,7 @@ final class LicenseGate: NSObject {
             c.footer = "授权码一次性有效，只解锁这一台设备（\(DeviceIdentity.deviceID.prefix(12))…）"
             c.refreshTitle = " 我已付款，刷新 "
             c.showCodeEntry = true
-            c.showCloseButton = !paywallShouldLock
+            c.showCloseButton = true
             return c
         }
 
@@ -413,6 +429,23 @@ final class LicenseGate: NSObject {
 
     /// 付费墙模式：付款后平台会把用户跳到 /claim/<secret> 发一张码（绑出口 IP），
     /// 这里每 4 秒问一次「我这个 IP 有没有未用的码」，有就直接兑换解锁 —— 用户不用输码。
+    private var offlineTimer: Timer?
+
+    /// 离线收银台：每 20 秒自动重连一次，网络恢复就自动收起
+    private var offlineSilent = false
+
+    private func startOfflineRetry(silent: Bool = false) {
+        offlineSilent = silent
+        offlineTimer?.invalidate()
+        let t = Timer.scheduledTimer(withTimeInterval: silent ? 60 : 20, repeats: true) { [weak self] _ in
+            guard let self = self else { return }
+            if !self.offlineSilent, self.paywall?.isVisible != true { return }
+            self.refreshFromServer()
+        }
+        RunLoop.main.add(t, forMode: .common)
+        offlineTimer = t
+    }
+
     private func startClaimPolling() {
         claimTimer?.invalidate()
         let t = Timer.scheduledTimer(withTimeInterval: 4.0, repeats: true) { [weak self] _ in
@@ -591,6 +624,8 @@ final class LicenseGate: NSObject {
     }
 
     private func dismissPaywall() {
+        offlineTimer?.invalidate()
+        offlineTimer = nil
         stopClaimPolling()
         // 只收起窗口，保留实例：下次再需要时同一份 UI 直接复用（避免窗口重建带来的时序问题）
         paywall?.close()

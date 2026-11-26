@@ -14,6 +14,8 @@ struct LocalState: Codable {
     var lastPaywallOrderID: String?
     /// 上次联网时「服务端时间 - 本地时间」，用来抵消把系统时钟往回调的行为
     var serverTimeOffset: Int?
+    /// 用户点"关闭"后，多久之内不再自动弹收银台
+    var paywallSnoozedUntil: Int?
 
     static let empty = LocalState(licenseToken: nil, trialToken: nil, trialEnd: nil,
                                   installedAt: Int(Date().timeIntervalSince1970),
@@ -21,7 +23,8 @@ struct LocalState: Codable {
                                   clockFloor: Int(Date().timeIntervalSince1970),
                                   firstRunAcknowledged: false,
                                   lastPaywallOrderID: nil,
-                                  serverTimeOffset: nil)
+                                  serverTimeOffset: nil,
+                                  paywallSnoozedUntil: nil)
 
     static var now: Int { Int(Date().timeIntervalSince1970) }
 

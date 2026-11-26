@@ -33,6 +33,9 @@ enum LicenseAPI {
         cfg.timeoutIntervalForRequest = 8
         cfg.timeoutIntervalForResource = 12
         cfg.requestCachePolicy = .reloadIgnoringLocalCacheData
+        // 关键：不要走系统代理。用户开着 Clash 且端口不通时，URLSession 会连不上授权服务器
+        // （curl 不走系统代理，所以命令行测着是通的，app 里却报 Could not connect）
+        cfg.connectionProxyDictionary = [:]
         cfg.httpAdditionalHeaders = ["User-Agent": "MagnetSearch/1.0 (macOS; license)"]
         return URLSession(configuration: cfg)
     }()
